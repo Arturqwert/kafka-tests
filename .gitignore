@@ -1,0 +1,6 @@
+# Project exclude paths
+/currency-rate-producer/target/
+/deposit-service/target/
+/loan-service/target/
+/model/target/
+/tests/target/
