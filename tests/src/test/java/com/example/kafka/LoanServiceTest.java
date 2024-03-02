@@ -1,4 +1,4 @@
-package com.example.loan;
+package com.example.kafka;
 
 import org.apache.groovy.util.Maps;
 import org.apache.kafka.clients.producer.KafkaProducer;

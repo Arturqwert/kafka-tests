@@ -1,4 +1,4 @@
-package com.example.producer;
+package com.example.kafka;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -13,14 +13,13 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 
 import static io.restassured.RestAssured.given;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class RateProducerTest {
+public class CurrencyRateProducerServiceTest {
 
     private static KafkaConsumer<String, String> consumer;
 
@@ -29,7 +28,7 @@ public class RateProducerTest {
         Properties config = new Properties();
         config.put("client.id", InetAddress.getLocalHost().getHostName());
         config.put("bootstrap.servers", "localhost:29092");
-        config.put("group.id", "autotest"); // generate
+        config.put("group.id", "autotest-java");
         config.put("enable.auto.commit", "true");
         config.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         config.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -37,38 +36,50 @@ public class RateProducerTest {
     }
 
     @AfterAll
-    public static void disconnect() {
+    public static void disconnect(){
         consumer.close();
     }
 
     @Test
-    public void test() throws TimeoutException {
-        double price = new Random(17).nextDouble() * 100;
-        given().get("http://localhost:8081/rate/" + price).then().extract().asPrettyString();
+    public void test() throws Exception {
+        String rate = "0.997";
 
-        ConsumerRecord<String, String> record = awaitMessage(
+        given().get("http://localhost:8081/rate/" + rate);
+
+        String rateAsIs = getRateFromKafka(
                 List.of("prices"),
-                r -> r.value().contains(Double.toString(price)),
                 Duration.ofSeconds(10),
-                "нет сообщения, содержащего " + price
+                r -> r.value().contains(rate),
+                "rate" + rate + " is not founded."
         );
-        assertNotNull(record.value());
+
+        assertTrue(rateAsIs.contains(rate));
     }
 
-    private ConsumerRecord<String, String> awaitMessage(Collection<String> topics, Predicate<ConsumerRecord<String, String>> predicate, Duration duration) throws TimeoutException {
-        return awaitMessage(topics, predicate, duration, "Не дождались");
-    }
 
-    private ConsumerRecord<String, String> awaitMessage(Collection<String> topics, Predicate<ConsumerRecord<String, String>> predicate, Duration duration, String message) throws TimeoutException {
+    private String getRateFromKafka(
+            Collection<String> topics,
+            Duration duration,
+            Predicate<ConsumerRecord<String, String>> predicate) throws Exception {
+        return getRateFromKafka(topics, duration, predicate, "not found");
+    }
+    private String getRateFromKafka(
+            Collection<String> topics,
+            Duration duration,
+            Predicate<ConsumerRecord<String, String>> predicate,
+            String message)
+            throws Exception {
+
         consumer.subscribe(topics);
         long startTime = System.currentTimeMillis();
+        ConsumerRecords<String, String> poll;
 
         while (System.currentTimeMillis() - startTime < duration.toMillis()) {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(10));
-            for (ConsumerRecord<String, String> record : records) {
+            poll = consumer.poll(Duration.ofSeconds(10));
+            for (ConsumerRecord<String, String> record : poll) {
                 if (predicate.test(record)) {
-                    System.out.println(record.value());
-                    return record;
+                    System.out.println(record);
+                    return record.value();
                 }
             }
         }
